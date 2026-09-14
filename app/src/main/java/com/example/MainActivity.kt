@@ -48,6 +48,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Bolt
@@ -71,6 +72,7 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -118,6 +120,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.AddServerDialog
+import com.example.ui.AdminDashboardDialog
+import com.example.ui.AdminPasscodeDialog
 import com.example.ui.ServerSelectionSheet
 import com.example.ui.VpnLogsDialog
 import com.example.ui.theme.MyApplicationTheme
@@ -179,6 +183,11 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
     val showServerSheet by viewModel.showServerSheet.collectAsState()
     val showLogsDialog by viewModel.showLogsDialog.collectAsState()
     val showAddServerDialog by viewModel.showAddServerDialog.collectAsState()
+    val showAdminPasscodeDialog by viewModel.showAdminPasscodeDialog.collectAsState()
+    val showAdminDashboard by viewModel.showAdminDashboard.collectAsState()
+    val editingServer by viewModel.editingServer.collectAsState()
+    val adminTestResult by viewModel.adminTestResult.collectAsState()
+    val isTestingAdminServer by viewModel.isTestingAdminServer.collectAsState()
 
     var showPasswordText by remember { mutableStateOf(false) }
 
@@ -283,6 +292,17 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { viewModel.setShowAdminPasscodeDialog(true) },
+                        modifier = Modifier.testTag("admin_panel_top_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AdminPanelSettings,
+                            contentDescription = "لوحة تحكم المدير (mooh2026)",
+                            tint = VpnTealAccent
+                        )
+                    }
+
                     IconButton(
                         onClick = { viewModel.setShowAddServerDialog(true) },
                         modifier = Modifier.testTag("quick_import_link_button")
@@ -504,12 +524,30 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
                                     }
 
                                     Column {
-                                        Text(
-                                            text = selectedServer.cityAr,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = VpnTextPrimary
-                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = selectedServer.cityAr,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = VpnTextPrimary
+                                            )
+                                            if (selectedServer.sniHost.isNotBlank()) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(VpnTealAccent.copy(alpha = 0.2f))
+                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "📺 ${selectedServer.sniHost}",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = VpnTealAccent
+                                                    )
+                                                }
+                                            }
+                                        }
                                         Text(
                                             text = "${selectedServer.protocol} • ${selectedServer.host}:${selectedServer.port} ${if (selectedServer.pingMs > 0) "(${selectedServer.pingMs}ms)" else ""}",
                                             fontSize = 11.5.sp,
@@ -622,19 +660,45 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
                                     )
                                 }
                             }
+
+                            // Host Bug / Plan description badge
+                            if (selectedServer.sniHost.isNotBlank()) {
+                                HorizontalDivider(color = VpnCardBorder, thickness = 1.dp)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(VpnTealAccent.copy(alpha = 0.08f))
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Tv,
+                                        contentDescription = null,
+                                        tint = VpnTealAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "عرض الشريحة المطبق: ${selectedServer.sniHost} (تصفح عبر باقة اليوتيوب)",
+                                        fontSize = 11.sp,
+                                        color = VpnTealAccent,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // 3. Info Card (Screenshot 1: "? Conheça o PLUSPROSSH")
+                    // 3. Admin Control Panel Card (كود الدخول: mooh2026)
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .border(1.dp, VpnCardBorder, RoundedCornerShape(14.dp))
-                            .clickable { viewModel.setShowAddServerDialog(true) }
-                            .testTag("gcp_info_card"),
+                            .border(1.dp, VpnTealAccent.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                            .clickable { viewModel.setShowAdminPasscodeDialog(true) }
+                            .testTag("admin_panel_info_card"),
                         color = VpnCardBackground
                     ) {
                         Row(
@@ -656,7 +720,7 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Cloud,
+                                        imageVector = Icons.Default.AdminPanelSettings,
                                         contentDescription = null,
                                         tint = VpnTealAccent,
                                         modifier = Modifier.size(18.dp)
@@ -664,14 +728,25 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
                                 }
 
                                 Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "لوحة تحكم السيرفرات 🔐",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = VpnTextPrimary
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(VpnTealAccent.copy(alpha = 0.15f))
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        ) {
+                                            Text("الكود: mooh2026", fontSize = 9.sp, color = VpnTealAccent, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                     Text(
-                                        text = "خوادم Google Cloud Platform",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = VpnTextPrimary
-                                    )
-                                    Text(
-                                        text = "فحص مباشر للاتصال: إذا السيرفر شغال يتصل، وإذا مش شغال لا يتصل ↗",
+                                        text = "إدارة سيرفرات Google Cloud VPS، إضافة وحذف وتعديل هوست يوتيوب ↗",
                                         fontSize = 11.sp,
                                         color = VpnTextSecondary,
                                         lineHeight = 14.sp
@@ -816,6 +891,69 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
 
                 3 -> {
                     // TAB 3: CONFIGURAÇÃO (Settings)
+                    // Admin Panel Entry in Settings
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(1.dp, VpnTealAccent.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                            .clickable { viewModel.setShowAdminPasscodeDialog(true) }
+                            .testTag("admin_panel_settings_card"),
+                        color = VpnCardBackground
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(VpnTealAccent.copy(alpha = 0.15f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AdminPanelSettings,
+                                        contentDescription = null,
+                                        tint = VpnTealAccent,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
+                                Column {
+                                    Text(
+                                        text = "لوحة تحكم المدير 🔐 (mooh2026)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = VpnTextPrimary
+                                    )
+                                    Text(
+                                        text = "إضافة وتعديل وحذف سيرفرات Google Cloud VPS وضبط ثغرات الشريحة (Host / SNI)",
+                                        fontSize = 11.5.sp,
+                                        color = VpnTextSecondary,
+                                        lineHeight = 15.sp
+                                    )
+                                }
+                            }
+
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = VpnTealAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
                     SecurityFeaturesCard(
                         protocol = protocol,
                         onProtocolChange = { viewModel.setProtocol(it) },
@@ -841,6 +979,10 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
             onOpenAddCustomServer = {
                 viewModel.setShowServerSheet(false)
                 viewModel.setShowAddServerDialog(true)
+            },
+            onOpenAdminPanel = {
+                viewModel.setShowServerSheet(false)
+                viewModel.setShowAdminPasscodeDialog(true)
             },
             onDismiss = { viewModel.setShowServerSheet(false) }
         )
@@ -872,6 +1014,44 @@ fun VpnAppScreen(viewModel: VpnViewModel = viewModel()) {
             logs = logs,
             onClearLogs = { viewModel.clearLogs() },
             onDismiss = { viewModel.setShowLogsDialog(false) }
+        )
+    }
+
+    if (showAdminPasscodeDialog) {
+        AdminPasscodeDialog(
+            onDismiss = { viewModel.setShowAdminPasscodeDialog(false) },
+            onVerify = { code -> viewModel.verifyAdminPasscode(code) }
+        )
+    }
+
+    if (showAdminDashboard) {
+        AdminDashboardDialog(
+            servers = servers,
+            editingServer = editingServer,
+            testResult = adminTestResult,
+            isTesting = isTestingAdminServer,
+            onSaveServer = { server ->
+                viewModel.saveOrUpdateServer(server)
+                Toast.makeText(context, "تم حفظ سيرفر ${server.cityAr} بنجاح!", Toast.LENGTH_SHORT).show()
+            },
+            onDeleteServer = { id ->
+                viewModel.deleteServer(id)
+                Toast.makeText(context, "تم حذف السيرفر", Toast.LENGTH_SHORT).show()
+            },
+            onTestServer = { server ->
+                viewModel.testAdminServer(server)
+            },
+            onResetDefaults = {
+                viewModel.resetServersToDefault()
+                Toast.makeText(context, "تمت استعادة كافة السيرفرات الافتراضية", Toast.LENGTH_SHORT).show()
+            },
+            onSelectServerToEdit = { server ->
+                viewModel.setEditingServer(server)
+            },
+            onDismiss = {
+                viewModel.setShowAdminDashboard(false)
+                viewModel.setEditingServer(null)
+            }
         )
     }
 }

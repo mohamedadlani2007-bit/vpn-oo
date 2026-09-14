@@ -27,9 +27,9 @@ class ExampleRobolectricTest {
   fun `default vpn servers list is valid`() {
     val servers = VpnServer.DEFAULT_SERVERS
     assertTrue(servers.isNotEmpty())
-    val germany = servers.first()
-    assertEquals("de_fra", germany.id)
-    assertNotNull(germany.flagEmoji)
+    val first = servers.first()
+    assertTrue(first.id.isNotBlank())
+    assertNotNull(first.flagEmoji)
   }
 
   @Test

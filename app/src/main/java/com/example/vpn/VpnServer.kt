@@ -13,17 +13,42 @@ data class VpnServer(
     val secondaryDns: String = "1.0.0.1",
     val pingMs: Int = -1,
     val loadPercent: Int = 35,
-    val protocol: String = "WireGuard",
+    val protocol: String = "SSH",
     val isCustom: Boolean = false,
     val rawConfig: String? = null,
     val extraParams: Map<String, String> = emptyMap(),
     val username: String = "",
     val password: String = "",
-    val category: String = "GCP" // "GCP", "SSH", "V2RAY", "CUSTOM"
+    val category: String = "GCP", // "GCP", "SSH", "V2RAY", "CUSTOM"
+    val sniHost: String = "",     // e.g. "youtube.com" (Bug Host / SNI Spoof)
+    val payload: String = "",     // Custom HTTP / WebSocket payload
+    val proxyHost: String = "",   // Proxy host IP
+    val proxyPort: Int = 0,       // Proxy port (e.g. 80, 8080, 3128)
+    val notes: String = ""        // Additional notes
 ) {
     companion object {
         val DEFAULT_SERVERS = listOf(
             // Google Cloud Platform Servers
+            VpnServer(
+                id = "gcp_youtube_sim",
+                countryName = "Google Cloud (YouTube Pack)",
+                countryNameAr = "قوقل كلاود - عرض يوتيوب للشريحة",
+                city = "Google Cloud VM",
+                cityAr = "📺 سيرفر Google Cloud (عرض YouTube)",
+                flagEmoji = "📺",
+                host = "8.8.8.8",
+                port = 443,
+                dnsServer = "8.8.8.8",
+                secondaryDns = "8.8.4.4",
+                pingMs = 28,
+                loadPercent = 22,
+                protocol = "SSH",
+                category = "GCP",
+                sniHost = "youtube.com",
+                username = "admin",
+                password = "",
+                notes = "معد خصيصاً للشريحة التي تحتوي على عرض YouTube"
+            ),
             VpnServer(
                 id = "gcp_us_central",
                 countryName = "Google Cloud (US Central)",
@@ -58,6 +83,7 @@ data class VpnServer(
                 loadPercent = 32,
                 protocol = "VLESS",
                 category = "GCP",
+                sniHost = "youtube.com",
                 rawConfig = "vless://gcp-eu@1.1.1.1:443?type=ws&security=tls#Google-Cloud-Frankfurt"
             ),
             VpnServer(
@@ -81,6 +107,29 @@ data class VpnServer(
 
             // SSH / BHTTP Category (Matches Screenshot 1 & 2)
             VpnServer(
+                id = "ssh_ocean_proxy",
+                countryName = "SSHOcean (Proxy + Payload)",
+                countryNameAr = "سيرفر SSHOcean (بروكسي + بايلود)",
+                city = "Squid Proxy Tunnel",
+                cityAr = "📺 SSHOcean بروكسي + بايلود يوتيوب",
+                flagEmoji = "⚡",
+                host = "1.1.1.1",
+                port = 22,
+                dnsServer = "1.1.1.1",
+                secondaryDns = "8.8.8.8",
+                pingMs = 35,
+                loadPercent = 25,
+                protocol = "SSH + PROXY",
+                category = "SSH",
+                sniHost = "youtube.com",
+                proxyHost = "1.1.1.1",
+                proxyPort = 8080,
+                payload = "GET / HTTP/1.1[crlf]Host: youtube.com[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]",
+                username = "sshocean",
+                password = "",
+                notes = "سيرفر SSH مع بروكسي سكويد وبايلود ثغرة يوتيوب للشريحة"
+            ),
+            VpnServer(
                 id = "ssh_bhttp_vivo",
                 countryName = "BHTTP SSH Tunnel",
                 countryNameAr = "BHTTP VIVO,TIM,CLARO - SSH_BHTTP",
@@ -95,6 +144,7 @@ data class VpnServer(
                 loadPercent = 48,
                 protocol = "SSH",
                 category = "SSH",
+                sniHost = "m.youtube.com",
                 username = "test_user",
                 password = ""
             ),
@@ -113,6 +163,7 @@ data class VpnServer(
                 loadPercent = 35,
                 protocol = "SSH",
                 category = "SSH",
+                sniHost = "youtube.com",
                 username = "client",
                 password = ""
             ),
@@ -133,6 +184,7 @@ data class VpnServer(
                 loadPercent = 29,
                 protocol = "VLESS",
                 category = "V2RAY",
+                sniHost = "youtube.com",
                 rawConfig = "vless://tim-xray@1.1.1.1:443?type=ws&security=tls#TIM-XRAY-01",
                 extraParams = mapOf("security" to "tls", "type" to "ws")
             ),

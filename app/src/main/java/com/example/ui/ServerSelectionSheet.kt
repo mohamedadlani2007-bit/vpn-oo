@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Refresh
@@ -71,6 +72,7 @@ fun ServerSelectionSheet(
     onSelectServer: (VpnServer) -> Unit,
     onRefreshPings: () -> Unit,
     onOpenAddCustomServer: () -> Unit,
+    onOpenAdminPanel: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -165,6 +167,19 @@ fun ServerSelectionSheet(
                             contentDescription = "إضافة سيرفر",
                             tint = VpnTealAccent
                         )
+                    }
+
+                    if (onOpenAdminPanel != null) {
+                        IconButton(
+                            onClick = onOpenAdminPanel,
+                            modifier = Modifier.testTag("admin_panel_sheet_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AdminPanelSettings,
+                                contentDescription = "لوحة تحكم المدير (mooh2026)",
+                                tint = VpnTealAccent
+                            )
+                        }
                     }
                 }
             }
@@ -369,12 +384,46 @@ fun ServerListItem(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column {
-                    Text(
-                        text = server.cityAr,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = VpnTextPrimary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = server.cityAr,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = VpnTextPrimary
+                        )
+                        if (server.sniHost.isNotBlank()) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(VpnTealAccent.copy(alpha = 0.18f))
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "📺 ${server.sniHost}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = VpnTealAccent
+                                )
+                            }
+                        }
+                        if (server.proxyHost.isNotBlank() && server.proxyPort > 0) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFFFF9800).copy(alpha = 0.18f))
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "🔌 بروكسي: ${server.proxyPort}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFB74D)
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(2.dp))
 

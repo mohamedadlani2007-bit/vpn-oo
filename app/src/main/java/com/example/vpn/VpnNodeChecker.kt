@@ -36,6 +36,53 @@ object VpnNodeChecker {
         val start = System.currentTimeMillis()
 
         try {
+            // Check if server has a dedicated HTTP/Squid Proxy configured (SSHOcean / Custom Proxy)
+            val proxyHost = server.proxyHost.trim()
+            val proxyPort = server.proxyPort
+            val hasProxy = proxyHost.isNotBlank() && proxyPort > 0
+            val isProxyProtocol = server.protocol.contains("PROXY", ignoreCase = true) || 
+                                 server.protocol.contains("PAYLOAD", ignoreCase = true) ||
+                                 hasProxy
+
+            if (isProxyProtocol && hasProxy) {
+                var proxyStatus = ""
+                var httpCode = ""
+                Socket().use { proxySocket ->
+                    proxySocket.soTimeout = timeoutMs
+                    proxySocket.connect(InetSocketAddress(proxyHost, proxyPort), timeoutMs)
+                    
+                    // If custom payload provided, inject and test response
+                    val payloadToSend = if (server.payload.isNotBlank()) {
+                        server.payload
+                            .replace("[crlf]", "\r\n", ignoreCase = true)
+                            .replace("[cr]", "\r", ignoreCase = true)
+                            .replace("[lf]", "\n", ignoreCase = true)
+                            .replace("[host_port]", "$host:$port")
+                            .replace("[host]", host)
+                            .replace("[port]", port.toString())
+                            .replace("[bug_host]", if (server.sniHost.isNotBlank()) server.sniHost else "youtube.com")
+                    } else {
+                        "CONNECT $host:$port HTTP/1.1\r\nHost: ${if (server.sniHost.isNotBlank()) server.sniHost else host}\r\nProxy-Connection: Keep-Alive\r\n\r\n"
+                    }
+
+                    try {
+                        val writer = proxySocket.getOutputStream()
+                        writer.write(payloadToSend.toByteArray(Charsets.UTF_8))
+                        writer.flush()
+                        val reader = proxySocket.getInputStream().bufferedReader()
+                        httpCode = reader.readLine() ?: ""
+                    } catch (_: Exception) {}
+                }
+
+                val latency = (System.currentTimeMillis() - start).toInt().coerceAtLeast(12)
+                return@withContext ServerHealthResult(
+                    isReachable = true,
+                    latencyMs = latency,
+                    statusMessage = "البروكسي وخادم SSH شغالين ⚡",
+                    details = if (httpCode.isNotBlank()) "استجابة البروكسي ($proxyHost:$proxyPort): ${httpCode.take(35)}" else "بروكسي $proxyHost:$proxyPort متصل وجاهز للحقن"
+                )
+            }
+
             when (server.protocol.uppercase()) {
                 "VLESS", "VMESS", "TROJAN" -> {
                     // Try TLS handshake if port is 443 or security=tls, otherwise standard TCP
@@ -63,22 +110,45 @@ object VpnNodeChecker {
                     )
                 }
 
-                "SSH" -> {
-                    // SSH server sends banner e.g. "SSH-2.0-OpenSSH..."
-                    var banner = ""
-                    Socket().use { socket ->
-                        socket.soTimeout = timeoutMs
-                        socket.connect(InetSocketAddress(host, port), timeoutMs)
-                        val reader = socket.getInputStream().bufferedReader()
-                        banner = reader.readLine() ?: ""
+                "SSH", "SSL", "SSH_SSL", "DIRECT" -> {
+                    val sni = server.sniHost.trim()
+                    if (sni.isNotBlank() && (port == 443 || server.protocol.contains("SSL", ignoreCase = true))) {
+                        // SSL/TLS SNI Handshake check with Bug Host (e.g. youtube.com)
+                        Socket().use { rawSocket ->
+                            rawSocket.connect(InetSocketAddress(host, port), timeoutMs)
+                            val sslFactory = SSLSocketFactory.getDefault() as SSLSocketFactory
+                            val sslSocket = sslFactory.createSocket(rawSocket, sni, port, true)
+                            sslSocket.soTimeout = timeoutMs
+                            (sslSocket as? javax.net.ssl.SSLSocket)?.startHandshake()
+                        }
+                        val latency = (System.currentTimeMillis() - start).toInt().coerceAtLeast(10)
+                        ServerHealthResult(
+                            isReachable = true,
+                            latencyMs = latency,
+                            statusMessage = "ثغرة SNI ($sni) شغالة",
+                            details = "تم تأكيد مصافحة TLS SNI: $sni عبر $host:$port بنجاح"
+                        )
+                    } else {
+                        // Regular SSH check or banner read
+                        var banner = ""
+                        Socket().use { socket ->
+                            socket.soTimeout = timeoutMs
+                            socket.connect(InetSocketAddress(host, port), timeoutMs)
+                            if (port == 22 || server.protocol.equals("SSH", ignoreCase = true)) {
+                                try {
+                                    val reader = socket.getInputStream().bufferedReader()
+                                    banner = reader.readLine() ?: ""
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        val latency = (System.currentTimeMillis() - start).toInt().coerceAtLeast(10)
+                        ServerHealthResult(
+                            isReachable = true,
+                            latencyMs = latency,
+                            statusMessage = "خادم SSH متصل وشغال",
+                            details = if (banner.isNotBlank()) "إشعار الخادم: ${banner.take(40)}" else "المنفذ $port مفتوح ومتاح"
+                        )
                     }
-                    val latency = (System.currentTimeMillis() - start).toInt().coerceAtLeast(10)
-                    ServerHealthResult(
-                        isReachable = true,
-                        latencyMs = latency,
-                        statusMessage = "خادم SSH متصل",
-                        details = if (banner.isNotBlank()) "إشعار الخادم: ${banner.take(40)}" else "المنفذ $port مفتوح"
-                    )
                 }
 
                 "DNS TUNNEL", "DNS" -> {

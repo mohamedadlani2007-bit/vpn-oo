@@ -54,6 +54,10 @@ class RealVpnService : VpnService() {
         const val EXTRA_SERVER_COUNTRY = "extra_server_country"
         const val EXTRA_SERVER_PROTOCOL = "extra_server_protocol"
         const val EXTRA_SERVER_CONFIG = "extra_server_config"
+        const val EXTRA_SERVER_SNI = "extra_server_sni"
+        const val EXTRA_SERVER_PAYLOAD = "extra_server_payload"
+        const val EXTRA_SERVER_PROXY_HOST = "extra_server_proxy_host"
+        const val EXTRA_SERVER_PROXY_PORT = "extra_server_proxy_port"
 
         fun startVpn(context: Context, server: VpnServer) {
             val intent = Intent(context, RealVpnService::class.java).apply {
@@ -66,6 +70,10 @@ class RealVpnService : VpnService() {
                 putExtra(EXTRA_SERVER_COUNTRY, server.countryNameAr)
                 putExtra(EXTRA_SERVER_PROTOCOL, server.protocol)
                 putExtra(EXTRA_SERVER_CONFIG, server.rawConfig ?: "")
+                putExtra(EXTRA_SERVER_SNI, server.sniHost)
+                putExtra(EXTRA_SERVER_PAYLOAD, server.payload)
+                putExtra(EXTRA_SERVER_PROXY_HOST, server.proxyHost)
+                putExtra(EXTRA_SERVER_PROXY_PORT, server.proxyPort)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -99,6 +107,10 @@ class RealVpnService : VpnService() {
                 val serverPort = intent.getIntExtra(EXTRA_SERVER_PORT, 51820)
                 val protocol = intent.getStringExtra(EXTRA_SERVER_PROTOCOL) ?: "VPN"
                 val rawConfig = intent.getStringExtra(EXTRA_SERVER_CONFIG) ?: ""
+                val sniHost = intent.getStringExtra(EXTRA_SERVER_SNI) ?: ""
+                val payload = intent.getStringExtra(EXTRA_SERVER_PAYLOAD) ?: ""
+                val proxyHost = intent.getStringExtra(EXTRA_SERVER_PROXY_HOST) ?: ""
+                val proxyPort = intent.getIntExtra(EXTRA_SERVER_PROXY_PORT, 0)
 
                 startVpnTunnel(
                     name = "$serverCountry - $serverName",
@@ -106,7 +118,11 @@ class RealVpnService : VpnService() {
                     port = serverPort,
                     dns = serverDns,
                     protocol = protocol,
-                    rawConfig = rawConfig
+                    rawConfig = rawConfig,
+                    sniHost = sniHost,
+                    payload = payload,
+                    proxyHost = proxyHost,
+                    proxyPort = proxyPort
                 )
             }
             ACTION_DISCONNECT -> {
@@ -123,10 +139,20 @@ class RealVpnService : VpnService() {
         port: Int,
         dns: String,
         protocol: String = "WireGuard",
-        rawConfig: String = ""
+        rawConfig: String = "",
+        sniHost: String = "",
+        payload: String = "",
+        proxyHost: String = "",
+        proxyPort: Int = 0
     ) {
         VpnController.updateStatus(ConnectionStatus.CONNECTING)
         VpnController.log("VPN", "بدء تهيئة بروتوكول $protocol إلى $host:$port")
+        if (sniHost.isNotBlank()) {
+            VpnController.log("SNI", "📺 تطبيق ثغرة العرض / Bug Host: $sniHost (توجيه الشريحة)")
+        }
+        if (proxyHost.isNotBlank()) {
+            VpnController.log("PROXY", "تطبيق البروكسي: $proxyHost:$proxyPort")
+        }
         if (rawConfig.isNotBlank()) {
             VpnController.log("CONFIG", "تطبيق إعدادات الرابط: ${rawConfig.take(50)}...")
         }
@@ -147,14 +173,18 @@ class RealVpnService : VpnService() {
                     host = host,
                     port = port,
                     protocol = protocol,
-                    rawConfig = rawConfig
+                    rawConfig = rawConfig,
+                    sniHost = sniHost,
+                    payload = payload,
+                    proxyHost = proxyHost,
+                    proxyPort = proxyPort
                 )
                 val health = VpnNodeChecker.checkServerHealth(dummyServer, timeoutMs = 3500)
                 VpnController.log("HEALTH", "نتيجة فحص السيرفر ($host:$port): ${health.statusMessage} (${health.details})")
 
                 if (!health.isReachable) {
                     VpnController.updateStatus(ConnectionStatus.ERROR)
-                    val failureReason = "فشل الاتصال: السيرفر ${dummyServer.cityAr} ($host:$port) غير شغال أو لا يستجيب!\n${health.details}"
+                    val failureReason = "فشل الاتصال: السيرفر $name ($host:$port) غير شغال أو لا يستجيب!\n${health.details}"
                     VpnController.setErrorMessage(failureReason)
                     VpnController.log("VPN", "❌ تم رفض الاتصال لأن السيرفر غير متصل أو المنفذ مغلق", isError = true)
                     
@@ -163,7 +193,7 @@ class RealVpnService : VpnService() {
                     return@launch
                 }
 
-                VpnController.log("VPN", "⚡ السيرفر شغال بنجاح (زمن الاستجابة: ${health.latencyMs}ms). جاري إنشاء النفق المشفر...")
+                VpnController.log("VPN", "⚡ السيرفر شغال بنجاح (استجابة: ${health.latencyMs}ms). ${if (sniHost.isNotBlank()) "تم تأكيد ثغرة $sniHost" else ""}")
 
                 val builder = Builder()
                     .setSession("VPN Shield ($protocol): $name")

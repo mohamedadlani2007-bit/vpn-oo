@@ -25,7 +25,7 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     val errorMessage: StateFlow<String?> = VpnController.errorMessage
     val activeTab: StateFlow<Int> = VpnController.activeTab
 
-    private val _servers = MutableStateFlow(VpnServer.DEFAULT_SERVERS)
+    private val _servers = MutableStateFlow(ServerStorageManager.loadServers(application))
     val servers: StateFlow<List<VpnServer>> = _servers.asStateFlow()
 
     private val _networkType = MutableStateFlow("جاري الفحص...")
@@ -43,7 +43,27 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     private val _showAddServerDialog = MutableStateFlow(false)
     val showAddServerDialog: StateFlow<Boolean> = _showAddServerDialog.asStateFlow()
 
+    // Admin Panel (Code: mooh2026)
+    private val _showAdminPasscodeDialog = MutableStateFlow(false)
+    val showAdminPasscodeDialog: StateFlow<Boolean> = _showAdminPasscodeDialog.asStateFlow()
+
+    private val _showAdminDashboard = MutableStateFlow(false)
+    val showAdminDashboard: StateFlow<Boolean> = _showAdminDashboard.asStateFlow()
+
+    private val _editingServer = MutableStateFlow<VpnServer?>(null)
+    val editingServer: StateFlow<VpnServer?> = _editingServer.asStateFlow()
+
+    private val _adminTestResult = MutableStateFlow<ServerHealthResult?>(null)
+    val adminTestResult: StateFlow<ServerHealthResult?> = _adminTestResult.asStateFlow()
+
+    private val _isTestingAdminServer = MutableStateFlow(false)
+    val isTestingAdminServer: StateFlow<Boolean> = _isTestingAdminServer.asStateFlow()
+
     init {
+        // Ensure default selected server is valid
+        if (_servers.value.isNotEmpty()) {
+            VpnController.selectServer(_servers.value.first())
+        }
         refreshNetworkInfo()
         testServerPings()
     }
@@ -248,6 +268,94 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setShowAddServerDialog(show: Boolean) {
         _showAddServerDialog.value = show
+    }
+
+    // Admin Control Panel (Passcode: mooh2026)
+    fun setShowAdminPasscodeDialog(show: Boolean) {
+        _showAdminPasscodeDialog.value = show
+    }
+
+    fun setShowAdminDashboard(show: Boolean) {
+        _showAdminDashboard.value = show
+    }
+
+    fun verifyAdminPasscode(enteredPin: String): Boolean {
+        val valid = ServerStorageManager.verifyAdminPin(enteredPin)
+        if (valid) {
+            _showAdminPasscodeDialog.value = false
+            _showAdminDashboard.value = true
+            VpnController.log("ADMIN", "تم تسجيل دخول المدير بنجاح بكود mooh2026")
+        } else {
+            VpnController.log("ADMIN", "محاولة دخول خاطئة إلى لوحة تحكم السيرفرات", isError = true)
+        }
+        return valid
+    }
+
+    fun setEditingServer(server: VpnServer?) {
+        _editingServer.value = server
+        _adminTestResult.value = null
+    }
+
+    fun saveOrUpdateServer(server: VpnServer) {
+        val current = _servers.value.toMutableList()
+        val existingIndex = current.indexOfFirst { it.id == server.id }
+        if (existingIndex != -1) {
+            current[existingIndex] = server
+            VpnController.log("ADMIN", "تم تعديل السيرفر: ${server.cityAr} (${server.host}:${server.port})")
+        } else {
+            current.add(0, server)
+            VpnController.log("ADMIN", "تمت إضافة سيرفر جديد: ${server.cityAr} (${server.host}:${server.port})")
+        }
+        _servers.value = current
+        ServerStorageManager.saveServers(getApplication(), current)
+
+        // If currently selected server was updated, refresh it
+        if (selectedServer.value.id == server.id) {
+            VpnController.selectServer(server)
+        }
+
+        // Test health of this server in background
+        viewModelScope.launch {
+            val health = VpnNodeChecker.checkServerHealth(server)
+            val updated = server.copy(pingMs = if (health.isReachable) health.latencyMs else -1)
+            val updatedList = _servers.value.map { if (it.id == server.id) updated else it }
+            _servers.value = updatedList
+            ServerStorageManager.saveServers(getApplication(), updatedList)
+            if (selectedServer.value.id == server.id) {
+                VpnController.selectServer(updated)
+            }
+        }
+    }
+
+    fun deleteServer(serverId: String) {
+        val current = _servers.value.filter { it.id != serverId }
+        val remaining = if (current.isEmpty()) VpnServer.DEFAULT_SERVERS else current
+        _servers.value = remaining
+        ServerStorageManager.saveServers(getApplication(), remaining)
+        VpnController.log("ADMIN", "تم حذف السيرفر ذو المعرف: $serverId")
+
+        if (selectedServer.value.id == serverId) {
+            VpnController.selectServer(remaining.first())
+        }
+    }
+
+    fun resetServersToDefault() {
+        val defaults = ServerStorageManager.resetToDefaults(getApplication())
+        _servers.value = defaults
+        VpnController.selectServer(defaults.first())
+        VpnController.log("ADMIN", "تمت استعادة كافة السيرفرات الافتراضية")
+        testServerPings()
+    }
+
+    fun testAdminServer(server: VpnServer) {
+        viewModelScope.launch {
+            _isTestingAdminServer.value = true
+            _adminTestResult.value = null
+            val result = VpnNodeChecker.checkServerHealth(server, timeoutMs = 3500)
+            _adminTestResult.value = result
+            _isTestingAdminServer.value = false
+            VpnController.log("ADMIN_PROBE", "فحص الخادم ${server.host}:${server.port} -> ${result.statusMessage} (${result.details})")
+        }
     }
 
     fun clearLogs() {
